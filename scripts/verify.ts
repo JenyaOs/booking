@@ -31,6 +31,7 @@ async function apiTests() {
     const seed = await login(admin, { action: "demo", role: "admin" }); await login(teacher, { action: "demo", role: "teacher" });
     const newTeam = await mutation(admin, { action: "create_team", size: 2 }); const credentials = newTeam.credentials;
     const studentData = await login(student, { action: "login", username: credentials.username, password: credentials.password });
+    if (!studentData.user) throw new Error("User not authenticated");
     const teamId = studentData.user.teamId!; teamIds.push(teamId); assert.equal(studentData.user.role, "student"); assert.equal(studentData.teams[0].consentAt, null);
     const [userRecord] = await db.select().from(users).where(eq(users.teamId, teamId)); assert.notEqual(userRecord.passwordHash, credentials.password); assert.match(userRecord.passwordHash, /^[a-f0-9]+:[a-f0-9]+$/);
     log("Generated credentials, password hashing and real login");

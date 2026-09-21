@@ -10,7 +10,7 @@ export interface Progress { id: number; teamId: number; labId: number; status: L
 export interface Booking { id: string; teamId: number; labId: number; startAt: string; purpose: "defense" | "consultation"; status: BookingStatus; comment: string; teacherComment: string; createdAt: string }
 export interface LabFile { id: string; teamId: number; labId: number; version: number; name: string; size: number; createdAt: string }
 export interface HistoryItem { id: string; teamId: number; labId: number | null; actor: string; action: string; detail: string; createdAt: string }
-export interface WorkspaceData { user: PublicUser; authenticated: boolean; courses: Course[]; teams: Team[]; labs: Lab[]; progress: Progress[]; bookings: Booking[]; files: LabFile[]; history: HistoryItem[]; defaultDate: string }
+export interface WorkspaceData { user: PublicUser | null; authenticated: boolean; courses: Course[]; teams: Team[]; labs: Lab[]; progress: Progress[]; bookings: Booking[]; files: LabFile[]; history: HistoryItem[]; defaultDate: string }
 
 export const ACTIVE_STATUSES: BookingStatus[] = ["pending", "confirmed", "revision"];
 export const LAB_LABELS: Record<LabStatus, string> = { new: "Новая", in_progress: "В работе", review: "На проверке", revision: "Требует доработки", completed: "Выполнена" };

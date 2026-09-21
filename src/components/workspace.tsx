@@ -1,19 +1,98 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { ArrowDownToLine, ArrowLeftRight, ArrowRight, ArrowUpRight, Bell, BookOpen, CalendarCheck2, CalendarDays, CalendarRange, ChartNoAxesCombined, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, CircleHelp, Clock3, Code2, GraduationCap, Grid2X2, House, Info, LayoutGrid, List, LogIn, Menu, MessagesSquare, Plus, Search, Settings2, ShieldCheck, Sparkles, Target, Users, X } from "lucide-react";
+import { ArrowDownToLine, ArrowLeftRight, ArrowRight, ArrowUpRight, Bell, BookOpen, CalendarCheck2, CalendarDays, CalendarRange, ChartNoAxesCombined, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, CircleHelp, Clock3, Code2, Eye, EyeOff, GraduationCap, Grid2X2, House, Info, LayoutGrid, List, LogIn, Menu, MessagesSquare, Plus, Search, Settings2, ShieldCheck, Sparkles, Target, TriangleAlert, Users, X } from "lucide-react";
 import { ACTIVE_STATUSES, BOOKING_LABELS, LAB_LABELS, LIMIT_MESSAGE, ROLE_LABELS, addDays, dayKey, formatDate, isActive, nextSaturday, slotsForDay, timeLabel, type Booking, type Lab, type Page, type Role, type WorkspaceData } from "@/lib/types";
 import { Avatar, Brand, EmptyState, PrepIllustration, Spinner, StatusBadge, type ModalState, type Mutate, type MutationResult } from "@/components/ui";
 import WorkspaceDialogs from "@/components/dialogs";
 
 const PAGE_NAMES: Record<Page, string> = { schedule: "Расписание", progress: "Мой прогресс", materials: "Материалы курса", team: "Моя бригада", settings: "Настройки" };
 
-export default function Workspace({ initialData }: { initialData: WorkspaceData }) {
-  const [data, setData] = useState(initialData);
+// Компонент страницы входа - показывает только форму для ввода логина и пароля
+function LoginPage({ onAuthenticate, busy, error }: { onAuthenticate: (input: { role?: Role; username?: string; password?: string }) => Promise<boolean>; busy: boolean; error: string }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [localError, setLocalError] = useState("");
+  
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLocalError("");
+    const form = new FormData(event.currentTarget);
+    const username = form.get("username") as string;
+    const password = form.get("password") as string;
+    if (!username || !password) {
+      setLocalError("Введите логин и пароль");
+      return;
+    }
+    await onAuthenticate({ username, password });
+  };
+
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-header">
+          <Brand />
+          <h1>Пары</h1>
+          <p>Система управления лабораторными работами</p>
+        </div>
+        <form onSubmit={submit}>
+          <label className="field">
+            Логин
+            <input 
+              name="username" 
+              autoComplete="username" 
+              placeholder="brigada-22" 
+              required 
+              maxLength={100}
+              disabled={busy}
+            />
+          </label>
+          <label className="field">
+            Пароль
+            <div className="password-input">
+              <input 
+                name="password" 
+                type={showPassword ? "text" : "password"} 
+                autoComplete="current-password" 
+                required 
+                maxLength={200} 
+                placeholder="Ваш пароль"
+                disabled={busy}
+              />
+              <button 
+                type="button" 
+                onClick={() => setShowPassword(!showPassword)} 
+                aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
+                disabled={busy}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </label>
+          {localError || error ? (
+            <div className="form-error" role="alert">
+              <TriangleAlert size={17} />
+              <span>{localError || error}</span>
+            </div>
+          ) : null}
+          <button className="button button-primary full-width" disabled={busy}>
+            {busy ? <Spinner /> : <LogIn size={16} />}
+            Войти в аккаунт
+          </button>
+        </form>
+        <p className="login-footnote">
+          Для получения учётной записи обратитесь к администратору.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function Workspace({ initialData }: { initialData: WorkspaceData | null }) {
+  const [data, setData] = useState<WorkspaceData | null>(initialData);
   const [page, setPage] = useState<Page>("schedule");
-  const [courseId, setCourseId] = useState(initialData.courses[0]?.id ?? 1);
-  const [selectedDay, setSelectedDay] = useState(initialData.defaultDate);
-  const [weekStart, setWeekStart] = useState(initialData.defaultDate);
+  const [courseId, setCourseId] = useState(initialData?.courses[0]?.id ?? 1);
+  const [selectedDay, setSelectedDay] = useState(initialData?.defaultDate ?? nextSaturday());
+  const [weekStart, setWeekStart] = useState(initialData?.defaultDate ?? nextSaturday());
   const [view, setView] = useState<"grid" | "list">("grid");
   const [modal, setModal] = useState<ModalState | null>(null);
   const [menu, setMenu] = useState<"profile" | "course" | "notifications" | null>(null);
@@ -23,6 +102,17 @@ export default function Workspace({ initialData }: { initialData: WorkspaceData 
   const [toast, setToast] = useState<{ message: string; error?: boolean } | null>(null);
   const [readAt, setReadAt] = useState("");
   const [preselectedLab, setPreselectedLab] = useState<number | undefined>();
+  
+  // Показываем только форму входа, если пользователь не аутентифицирован
+  if (!data?.authenticated || !data.user) {
+    return <LoginPage onAuthenticate={async (input) => {
+      setBusy(true); setError("");
+      try { const response = await fetch("/api/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: input.role ? "demo" : "login", ...input }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error); setData(result.data); setCourseId(result.data.courses[0]?.id ?? 1); setSelectedDay(result.data.defaultDate); setWeekStart(result.data.defaultDate); setMenu(null); setModal(null); setPage("schedule"); setToast({ message: result.message }); return true; }
+      catch (e) { setError(e instanceof Error ? e.message : "Не удалось войти"); return false; }
+      finally { setBusy(false); }
+    }} busy={busy} error={error} />;
+  }
+
   const user = data.user;
   const student = user.role === "student";
   const course = data.courses.find(c => c.id === courseId) ?? data.courses[0];
@@ -44,9 +134,8 @@ export default function Workspace({ initialData }: { initialData: WorkspaceData 
     const syncPage = () => { const hash = window.location.hash.slice(1) as Page; if (Object.keys(PAGE_NAMES).includes(hash)) setPage(hash); };
     syncPage(); window.addEventListener("popstate", syncPage); window.addEventListener("hashchange", syncPage);
     setReadAt(localStorage.getItem("pary-notifications-read") ?? "");
-    if (!initialData.authenticated) fetch("/api/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "demo", role: "student" }) }).then(r => r.json()).then(result => { if (result.data) setData(result.data); }).catch(() => setToast({ message: "Не удалось подключиться. Обновите страницу", error: true }));
     return () => { window.removeEventListener("popstate", syncPage); window.removeEventListener("hashchange", syncPage); };
-  }, [initialData.authenticated]);
+  }, []);
   useEffect(() => { const interval = setInterval(refresh, 30000); window.addEventListener("focus", refresh); return () => { clearInterval(interval); window.removeEventListener("focus", refresh); }; }, [refresh]);
   useEffect(() => { if (toast) { const timer = setTimeout(() => setToast(null), 5000); return () => clearTimeout(timer); } }, [toast]);
   useEffect(() => { if (data.authenticated && data.user.role === "student" && data.teams.find(t => t.id === data.user.teamId)?.consentAt === null) setModal({ kind: "profile" }); }, [data]);
