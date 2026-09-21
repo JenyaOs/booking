@@ -11,6 +11,7 @@ function BookingDate({ booking }: { booking: { startAt: string } }) { return <di
 
 export default function WorkspaceDialogs(props: Props) {
   const { modal, data, onClose } = props;
+  if (!data.user) return null;
   if (modal.kind === "booking") return <BookingDialog {...props} key={`booking-${modal.startAt}`} startAt={modal.startAt} labId={modal.labId} />;
   if (modal.kind === "cancel" || modal.kind === "reschedule" || modal.kind === "review") { const booking = data.bookings.find(b => b.id === modal.bookingId); if (!booking) return <Modal title="Заявка больше недоступна" onClose={onClose}><EmptyState title="Данные изменились" description="Закройте окно и обновите расписание." /></Modal>; if (modal.kind === "cancel") return <CancelDialog {...props} booking={booking} />; if (modal.kind === "reschedule") return <RescheduleDialog {...props} booking={booking} />; return <ReviewDialog {...props} key={booking.id} booking={booking} />; }
   if (modal.kind === "lab") { const lab = data.labs.find(l => l.id === modal.labId); return lab ? <LabDialog {...props} key={`${lab.id}-${modal.teamId}`} lab={lab} teamId={modal.teamId} /> : null; }

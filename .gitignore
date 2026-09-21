@@ -1,23 +1,19 @@
 ```
+# Next.js build output
+.next/
+out/
+
 # Dependencies
 node_modules/
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.py.class
-venv/
-.venv/
-.env
+# Environment variables
 .env.local
-.env.*
+.env
+*.env
 
-# Build outputs
-dist/
-build/
-target/
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
 
 # Logs
 *.log
@@ -26,20 +22,73 @@ target/
 .DS_Store
 Thumbs.db
 
-# IDE
+# Temporary files
+*.tmp
+*.temp
+
+# IDE specific
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
+
+# Package manager
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
 # Coverage
 coverage/
-htmlcov/
-.coverage
+.nyc_output
+istanbul/
+.html
 
-# Cache
-.mypy_cache/
-.pytest_cache/
-.gradle/
+# Build outputs
+dist/
+build/
+target/
+bin/
+lib/
+
+# Compiled JavaScript
+*.js.map
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+
+# Database
+*.db
+*.db-journal
+
+# Testing
+*.test.js
+*.spec.js
+test/
+tests/
+
+# Browsers
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# System
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+.Spotlight-V100
+.Trashes
 ```
