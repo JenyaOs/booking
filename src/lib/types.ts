@@ -3,7 +3,7 @@ export type LabStatus = "new" | "in_progress" | "review" | "revision" | "complet
 export type BookingStatus = "pending" | "confirmed" | "revision" | "rejected" | "cancelled" | "no_show" | "completed";
 export type Page = "schedule" | "progress" | "materials" | "team" | "settings";
 export interface PublicUser { id: string; username: string; name: string; role: Role; teamId: number | null }
-export interface Course { id: number; title: string; semester: string; teacher: string; groupCode: string; startTime: string; endTime: string }
+export interface Course { id: number; title: string; semester: string; teacher: string; groupCode: string; startTime: string; endTime: string; isActive: number }
 export interface Team { id: number; number: number; size: number; members: { name: string; contact: string }[]; consentAt: string | null; createdAt: string }
 export interface Lab { id: number; courseId: number; number: number; title: string; theory: string; practice: string; questions: string; deadline: string }
 export interface Progress { id: number; teamId: number; labId: number; status: LabStatus; score: string | null; updatedAt: string }

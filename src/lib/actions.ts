@@ -164,7 +164,7 @@ export async function mutateWorkspace(user: PublicUser, input: Input, file?: Fil
       const [team] = await tx.insert(teams).values({ number, size, members: Array.from({ length: size }, () => ({ name: "", contact: "" })) }).returning();
       const username = `brigada-${number}`; const password = randomBytes(9).toString("base64url");
       await tx.insert(users).values({ username, passwordHash: hashPassword(password), name: `Бригада №${number}`, role: "student", teamId: team.id });
-      const allLabs = await tx.select({ id: labs.id }).from(labs); if (allLabs.length) await tx.insert(progress).values(allLabs.map(lab => ({ teamId: team.id, labId: lab.id })));
+      const allLabs = await tx.select({ id: labs.id }).from(labs).innerJoin(courses, eq(labs.courseId, courses.id)).where(eq(courses.isActive, 1)); if (allLabs.length) await tx.insert(progress).values(allLabs.map(lab => ({ teamId: team.id, labId: lab.id })));
       await event(team.id, null, "team_created", `Создана бригада №${number}, участников: ${size}. Данные и согласие заполняются при первом входе.`);
       return { message: "Бригада создана", credentials: { username, password, number } };
     }

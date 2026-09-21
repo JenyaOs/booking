@@ -9,6 +9,7 @@ export const courses = pgTable("courses", {
   groupCode: text("group_code").notNull().default("ПИ-24-1"),
   startTime: text("start_time").notNull().default("10:00"),
   endTime: text("end_time").notNull().default("17:30"),
+  isActive: integer("is_active").notNull().default(1),
 });
 
 export const teams = pgTable("teams", {

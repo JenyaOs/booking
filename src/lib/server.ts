@@ -83,9 +83,9 @@ export async function getWorkspace(user: PublicUser, authenticated = true): Prom
   const student = user.role === "student";
   const teamId = user.teamId ?? -1;
   const [allCourses, allTeams, allLabs, allProgress, allBookings, allFiles, allHistory] = await Promise.all([
-    db.select().from(courses).orderBy(asc(courses.id)),
+    db.select().from(courses).where(eq(courses.isActive, 1)).orderBy(asc(courses.id)),
     db.select({ id: teams.id, number: teams.number, size: teams.size, members: teams.members, consentAt: teams.consentAt, createdAt: teams.createdAt }).from(teams).where(student ? eq(teams.id, teamId) : undefined).orderBy(asc(teams.number)),
-    db.select().from(labs).orderBy(asc(labs.number)),
+    db.select().from(labs).innerJoin(courses, eq(labs.courseId, courses.id)).where(eq(courses.isActive, 1)).orderBy(asc(labs.number)),
     db.select().from(progress).where(student ? eq(progress.teamId, teamId) : undefined),
     db.select().from(bookings).orderBy(asc(bookings.startAt)),
     db.select({ id: files.id, teamId: files.teamId, labId: files.labId, version: files.version, name: files.name, size: files.size, createdAt: files.createdAt }).from(files).where(student ? eq(files.teamId, teamId) : undefined).orderBy(desc(files.version)),
