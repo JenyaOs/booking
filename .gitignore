@@ -1,4 +1,8 @@
 ```
+# Next.js build output
+.next/
+out/
+
 # Dependencies
 node_modules/
 
@@ -43,7 +47,11 @@ Thumbs.db
 *.temp
 *~
 
-# IDE
+# Temporary files
+*.tmp
+*.temp
+
+# IDE specific
 .vscode/
 .idea/
 *.swp
@@ -55,8 +63,9 @@ Thumbs.db
 
 # Coverage
 coverage/
-htmlcov/
-.coverage
+.nyc_output
+istanbul/
+.html
 
 # MyPy
 .mypy_cache/
