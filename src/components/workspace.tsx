@@ -1,19 +1,98 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { ArrowDownToLine, ArrowLeftRight, ArrowRight, ArrowUpRight, Bell, BookOpen, CalendarCheck2, CalendarDays, CalendarRange, ChartNoAxesCombined, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, CircleHelp, Clock3, Code2, GraduationCap, Grid2X2, House, Info, LayoutGrid, List, LogIn, Menu, MessagesSquare, Plus, Search, Settings2, ShieldCheck, Sparkles, Target, Users, X } from "lucide-react";
+import { ArrowDownToLine, ArrowLeftRight, ArrowRight, ArrowUpRight, Bell, BookOpen, CalendarCheck2, CalendarDays, CalendarRange, ChartNoAxesCombined, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, CircleHelp, Clock3, Code2, Eye, EyeOff, GraduationCap, Grid2X2, House, Info, LayoutGrid, List, LogIn, Menu, MessagesSquare, Plus, Search, Settings2, ShieldCheck, Sparkles, Target, TriangleAlert, Users, X } from "lucide-react";
 import { ACTIVE_STATUSES, BOOKING_LABELS, LAB_LABELS, LIMIT_MESSAGE, ROLE_LABELS, addDays, dayKey, formatDate, isActive, nextSaturday, slotsForDay, timeLabel, type Booking, type Lab, type Page, type Role, type WorkspaceData } from "@/lib/types";
 import { Avatar, Brand, EmptyState, PrepIllustration, Spinner, StatusBadge, type ModalState, type Mutate, type MutationResult } from "@/components/ui";
 import WorkspaceDialogs from "@/components/dialogs";
 
 const PAGE_NAMES: Record<Page, string> = { schedule: "Расписание", progress: "Мой прогресс", materials: "Материалы курса", team: "Моя бригада", settings: "Настройки" };
 
-export default function Workspace({ initialData }: { initialData: WorkspaceData }) {
-  const [data, setData] = useState(initialData);
+// Компонент страницы входа - показывает только форму для ввода логина и пароля
+function LoginPage({ onAuthenticate, busy, error }: { onAuthenticate: (input: { role?: Role; username?: string; password?: string }) => Promise<boolean>; busy: boolean; error: string }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [localError, setLocalError] = useState("");
+  
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLocalError("");
+    const form = new FormData(event.currentTarget);
+    const username = form.get("username") as string;
+    const password = form.get("password") as string;
+    if (!username || !password) {
+      setLocalError("Введите логин и пароль");
+      return;
+    }
+    await onAuthenticate({ username, password });
+  };
+
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-header">
+          <Brand />
+          <h1>Пары</h1>
+          <p>Система управления лабораторными работами</p>
+        </div>
+        <form onSubmit={submit}>
+          <label className="field">
+            Логин
+            <input 
+              name="username" 
+              autoComplete="username" 
+              placeholder="brigada-22" 
+              required 
+              maxLength={100}
+              disabled={busy}
+            />
+          </label>
+          <label className="field">
+            Пароль
+            <div className="password-input">
+              <input 
+                name="password" 
+                type={showPassword ? "text" : "password"} 
+                autoComplete="current-password" 
+                required 
+                maxLength={200} 
+                placeholder="Ваш пароль"
+                disabled={busy}
+              />
+              <button 
+                type="button" 
+                onClick={() => setShowPassword(!showPassword)} 
+                aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
+                disabled={busy}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </label>
+          {localError || error ? (
+            <div className="form-error" role="alert">
+              <TriangleAlert size={17} />
+              <span>{localError || error}</span>
+            </div>
+          ) : null}
+          <button className="button button-primary full-width" disabled={busy}>
+            {busy ? <Spinner /> : <LogIn size={16} />}
+            Войти в аккаунт
+          </button>
+        </form>
+        <p className="login-footnote">
+          Для получения учётной записи обратитесь к администратору.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function Workspace({ initialData }: { initialData: WorkspaceData | null }) {
+  const [data, setData] = useState<WorkspaceData | null>(initialData);
   const [page, setPage] = useState<Page>("schedule");
-  const [courseId, setCourseId] = useState(initialData.courses[0]?.id ?? 1);
-  const [selectedDay, setSelectedDay] = useState(initialData.defaultDate);
-  const [weekStart, setWeekStart] = useState(initialData.defaultDate);
+  const [courseId, setCourseId] = useState(initialData?.courses[0]?.id ?? 1);
+  const [selectedDay, setSelectedDay] = useState(initialData?.defaultDate ?? nextSaturday());
+  const [weekStart, setWeekStart] = useState(initialData?.defaultDate ?? nextSaturday());
   const [view, setView] = useState<"grid" | "list">("grid");
   const [modal, setModal] = useState<ModalState | null>(null);
   const [menu, setMenu] = useState<"profile" | "course" | "notifications" | null>(null);
@@ -23,6 +102,17 @@ export default function Workspace({ initialData }: { initialData: WorkspaceData 
   const [toast, setToast] = useState<{ message: string; error?: boolean } | null>(null);
   const [readAt, setReadAt] = useState("");
   const [preselectedLab, setPreselectedLab] = useState<number | undefined>();
+  
+  // Показываем только форму входа, если пользователь не аутентифицирован
+  if (!data?.authenticated || !data.user) {
+    return <LoginPage onAuthenticate={async (input) => {
+      setBusy(true); setError("");
+      try { const response = await fetch("/api/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: input.role ? "demo" : "login", ...input }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error); setData(result.data); setCourseId(result.data.courses[0]?.id ?? 1); setSelectedDay(result.data.defaultDate); setWeekStart(result.data.defaultDate); setMenu(null); setModal(null); setPage("schedule"); setToast({ message: result.message }); return true; }
+      catch (e) { setError(e instanceof Error ? e.message : "Не удалось войти"); return false; }
+      finally { setBusy(false); }
+    }} busy={busy} error={error} />;
+  }
+
   const user = data.user;
   const student = user.role === "student";
   const course = data.courses.find(c => c.id === courseId) ?? data.courses[0];
@@ -44,12 +134,11 @@ export default function Workspace({ initialData }: { initialData: WorkspaceData 
     const syncPage = () => { const hash = window.location.hash.slice(1) as Page; if (Object.keys(PAGE_NAMES).includes(hash)) setPage(hash); };
     syncPage(); window.addEventListener("popstate", syncPage); window.addEventListener("hashchange", syncPage);
     setReadAt(localStorage.getItem("pary-notifications-read") ?? "");
-    if (!initialData.authenticated) fetch("/api/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "demo", role: "student" }) }).then(r => r.json()).then(result => { if (result.data) setData(result.data); }).catch(() => setToast({ message: "Не удалось подключиться. Обновите страницу", error: true }));
     return () => { window.removeEventListener("popstate", syncPage); window.removeEventListener("hashchange", syncPage); };
-  }, [initialData.authenticated]);
+  }, []);
   useEffect(() => { const interval = setInterval(refresh, 30000); window.addEventListener("focus", refresh); return () => { clearInterval(interval); window.removeEventListener("focus", refresh); }; }, [refresh]);
   useEffect(() => { if (toast) { const timer = setTimeout(() => setToast(null), 5000); return () => clearTimeout(timer); } }, [toast]);
-  useEffect(() => { if (data.authenticated && data.user.role === "student" && data.teams.find(t => t.id === data.user.teamId)?.consentAt === null) setModal({ kind: "profile" }); }, [data]);
+  useEffect(() => { if (data.authenticated && data.user?.role === "student" && data.teams.find(t => t.id === (data.user?.teamId ?? 0))?.consentAt === null) setModal({ kind: "profile" }); }, [data]);
 
   const mutate: Mutate = useCallback(async (input, file) => {
     setBusy(true); setError("");
@@ -125,13 +214,13 @@ export default function Workspace({ initialData }: { initialData: WorkspaceData 
 
 function CheckCheckIcon() { return <Check size={13} />; }
 function BookingCard({ booking, data, onOpen, onLab }: { booking: Booking; data: WorkspaceData; onOpen: (modal: ModalState) => void; onLab: (id: number) => void }) {
-  const lab = data.labs.find(l => l.id === booking.labId); const course = data.courses.find(c => c.id === lab?.courseId); const student = data.user.role === "student"; const canChange = new Date(booking.startAt).getTime() - Date.now() >= 86400000; const team = data.teams.find(t => t.id === booking.teamId);
+  const lab = data.labs.find(l => l.id === booking.labId); const course = data.courses.find(c => c.id === lab?.courseId); const student = data.user?.role === "student"; const canChange = new Date(booking.startAt).getTime() - Date.now() >= 86400000; const team = data.teams.find(t => t.id === booking.teamId);
   return <article className="booking-card"><div className="booking-card-top"><StatusBadge status={booking.status} kind="booking" /><button className="icon-button small-icon-button" aria-label="Подробности брони" onClick={() => onOpen({ kind: "review", bookingId: booking.id })}><ArrowUpRight size={16} /></button></div><button className="booking-lab-title" onClick={() => onLab(booking.labId)}><span>ЛАБОРАТОРНАЯ РАБОТА №{lab?.number}</span><h3>{lab?.title}</h3></button><div className="booking-meta"><span><CalendarDays size={15} />{formatDate(booking.startAt)}, суббота</span><span><Clock3 size={15} />{timeLabel(booking.startAt)} — {timeLabel(new Date(new Date(booking.startAt).getTime() + 900000))}<span className="duration-label">15 мин</span></span></div><div className="purpose-tag">{booking.purpose === "defense" ? <GraduationCap size={13} /> : <MessagesSquare size={13} />}{booking.purpose === "defense" ? "Сдача лабораторной" : "Консультация"}</div><div className="booking-person"><Avatar name={student ? course?.teacher ?? "Елена Смирнова" : `Бригада ${team?.number}`} color={student ? 2 : 0} /><span><strong>{student ? course?.teacher : `Бригада №${team?.number}`}</strong><small>{student ? "Преподаватель" : `${team?.size} участника`}</small></span></div>{student ? <><button className="button button-white reschedule-button" disabled={!canChange} title={!canChange ? "До встречи осталось менее 24 часов" : undefined} onClick={() => onOpen({ kind: "reschedule", bookingId: booking.id })}><ArrowLeftRight size={14} />Перезаписаться</button><button className="cancel-booking-button" disabled={!canChange} onClick={() => onOpen({ kind: "cancel", bookingId: booking.id })}>Отменить бронь</button></> : <button className="button button-primary full-width" onClick={() => onOpen({ kind: "review", bookingId: booking.id })}>Рассмотреть заявку<ArrowRight size={14} /></button>}</article>;
 }
 
 function ProgressPage({ data, labs, onLab, onTeam }: { data: WorkspaceData; labs: Lab[]; onLab: (id: number, teamId?: number) => void; onTeam: (id: number) => void }) {
-  const [filter, setFilter] = useState("all"); const [search, setSearch] = useState(""); const student = data.user.role === "student";
-  const progress = data.progress.filter(p => p.teamId === data.user.teamId && labs.some(l => l.id === p.labId)); const completed = progress.filter(p => p.status === "completed"); const score = completed.reduce((sum, p) => sum + Number(p.score ?? 0), 0);
+  const [filter, setFilter] = useState("all"); const [search, setSearch] = useState(""); const student = data.user?.role === "student";
+  const progress = data.progress.filter(p => p.teamId === (data.user?.teamId ?? 0) && labs.some(l => l.id === p.labId)); const completed = progress.filter(p => p.status === "completed"); const score = completed.reduce((sum, p) => sum + Number(p.score ?? 0), 0);
   if (!student) return <section className="panel"><div className="panel-heading"><h2>Все бригады<span className="mini-badge">{data.teams.length}</span></h2><div className="search-field"><Search size={16} /><input placeholder="Найти бригаду..." value={search} onChange={e => setSearch(e.target.value)} /></div></div><div className="responsive-table"><table><thead><tr><th>Бригада</th><th>Участники</th><th>Прогресс</th><th>Баллы</th><th /></tr></thead><tbody>{data.teams.filter(t => `${t.number} ${t.members.map(m => m.name).join(" ")}`.toLowerCase().includes(search.toLowerCase())).map(t => { const p = data.progress.filter(x => x.teamId === t.id && labs.some(l => l.id === x.labId)); const done = p.filter(x => x.status === "completed"); return <tr key={t.id} onClick={() => onTeam(t.id)}><td><strong>Бригада №{t.number}</strong></td><td><div className="avatar-stack">{t.members.map((m, i) => <Avatar key={i} name={m.name || `Участник ${i + 1}`} color={i} />)}<span>{t.size} участника</span></div></td><td><div className="table-progress"><span><i style={{ width: `${done.length / (labs.length || 1) * 100}%` }} /></span>{done.length} / {labs.length}</div></td><td><strong>{done.reduce((sum, x) => sum + Number(x.score || 0), 0)}</strong></td><td><button className="icon-button" aria-label={`Открыть бригаду ${t.number}`}><ChevronRight size={17} /></button></td></tr>; })}</tbody></table></div></section>;
   const filtered = labs.filter(l => l.title.toLowerCase().includes(search.toLowerCase()) && (filter === "all" || (progress.find(p => p.labId === l.id)?.status ?? "new") === filter));
   return <><div className="progress-overview"><div className="progress-circle" style={{ background: `conic-gradient(var(--purple) ${completed.length / (labs.length || 1) * 360}deg, #eeeaf6 0deg)` }}><span>{Math.round(completed.length / (labs.length || 1) * 100)}<small>%</small></span></div><div><span className="small-kicker">ВАШ ПУТЬ НА КУРСЕ</span><h2>{completed.length} из {labs.length} работ уже позади</h2><p>Хороший темп! Следующая маленькая победа — совсем рядом.</p></div><div className="overview-score"><span>Всего баллов</span><strong>{new Intl.NumberFormat("ru-RU").format(score)}</strong><small>Вы отлично справляетесь</small></div></div><section className="panel progress-panel"><div className="panel-toolbar"><div className="filter-tabs">{[{ id: "all", label: "Все работы" }, { id: "in_progress", label: "В работе" }, { id: "review", label: "На проверке" }, { id: "completed", label: "Выполнены" }].map(item => <button key={item.id} className={filter === item.id ? "selected" : ""} onClick={() => setFilter(item.id)}>{item.label}{item.id === "all" && <span>{labs.length}</span>}</button>)}</div><div className="search-field"><Search size={15} /><input placeholder="Найти работу..." value={search} onChange={e => setSearch(e.target.value)} /></div></div><div className="lab-rows">{filtered.length ? filtered.map(lab => { const p = progress.find(item => item.labId === lab.id); return <div className="lab-row" key={lab.id}><button className="lab-row-main" onClick={() => onLab(lab.id)}><span className={`lab-number lab-number-${p?.status ?? "new"}`}>{p?.status === "completed" ? <Check size={22} /> : String(lab.number).padStart(2, "0")}</span><span className="lab-row-title"><small>ЛАБОРАТОРНАЯ РАБОТА №{lab.number}</small><h3>{lab.title}</h3><span><CalendarDays size={12} />До {formatDate(lab.deadline)}</span></span><StatusBadge status={p?.status ?? "new"} /><span className="lab-row-score">{p?.score !== null && p?.score !== undefined ? <><strong>{p.score}</strong><small>баллов</small></> : <span>—</span>}</span><ChevronRight size={18} /></button><details className="lab-history-preview"><summary><Clock3 size={12} />История работы<span>{data.history.filter(h => h.labId === lab.id).length}</span><ChevronDown size={12} /></summary><div>{data.history.filter(h => h.labId === lab.id).length ? data.history.filter(h => h.labId === lab.id).slice(0, 5).map(h => <p key={h.id}><span>{formatDate(h.createdAt, { day: "numeric", month: "short" })}</span>{h.detail}<small>{h.actor}</small></p>) : <p>Откройте материалы, чтобы начать работу. Все изменения появятся здесь.</p>}</div></details></div>; }) : <EmptyState title="Таких работ пока нет" description="Попробуйте другой статус или измените поисковый запрос." />}</div></section></>;
@@ -139,18 +228,18 @@ function ProgressPage({ data, labs, onLab, onTeam }: { data: WorkspaceData; labs
 
 function MaterialsPage({ data, labs, onLab, onModal }: { data: WorkspaceData; labs: Lab[]; onLab: (id: number) => void; onModal: (modal: ModalState) => void }) {
   const [search, setSearch] = useState(""); const filtered = labs.filter(l => `${l.title} ${l.number}`.toLowerCase().includes(search.toLowerCase()));
-  return <><div className="materials-toolbar"><div className="search-field"><Search size={17} /><input placeholder="Поиск по названию лабораторной..." value={search} onChange={e => setSearch(e.target.value)} /></div><div className="toolbar-actions">{data.user.role === "admin" ? <><button className="button button-white" onClick={() => onModal({ kind: "create-course" })}><Plus size={16} />Новый курс</button><button className="button button-primary" onClick={() => onModal({ kind: "create-lab" })}><Plus size={16} />Добавить работу</button></> : <span className="muted-label">{labs.length} лабораторных работ</span>}</div></div><div className="materials-grid">{filtered.map(lab => { const status = data.progress.find(p => p.labId === lab.id && p.teamId === data.user.teamId)?.status ?? "new"; return <article className="material-card" key={lab.id}><div className="material-card-top"><span className={`material-icon material-icon-${lab.number % 4}`}><Code2 size={24} /></span><span className="material-number">ЛР {String(lab.number).padStart(2, "0")}</span></div><button className="material-title" onClick={() => onLab(lab.id)}><h2>{lab.title}</h2></button><p>{lab.theory.slice(0, 115)}…</p><div className="material-card-meta"><span><CalendarDays size={13} />До {formatDate(lab.deadline)}</span>{data.user.role === "student" && <StatusBadge status={status} />}</div><button className="material-open" onClick={() => onLab(lab.id)}>Открыть материалы<ArrowUpRight size={16} /></button></article>; })}</div>{!filtered.length && <EmptyState title={search ? "Ничего не нашлось" : "Начало нового курса"} description={search ? "Попробуйте поискать по другому названию." : "Лабораторные появятся здесь, как только администратор добавит материалы."} />}</>;
+  return <><div className="materials-toolbar"><div className="search-field"><Search size={17} /><input placeholder="Поиск по названию лабораторной..." value={search} onChange={e => setSearch(e.target.value)} /></div><div className="toolbar-actions">{data.user?.role === "admin" ? <><button className="button button-white" onClick={() => onModal({ kind: "create-course" })}><Plus size={16} />Новый курс</button><button className="button button-primary" onClick={() => onModal({ kind: "create-lab" })}><Plus size={16} />Добавить работу</button></> : <span className="muted-label">{labs.length} лабораторных работ</span>}</div></div><div className="materials-grid">{filtered.map(lab => { const status = data.progress.find(p => p.labId === lab.id && p.teamId === (data.user?.teamId ?? 0))?.status ?? "new"; return <article className="material-card" key={lab.id}><div className="material-card-top"><span className={`material-icon material-icon-${lab.number % 4}`}><Code2 size={24} /></span><span className="material-number">ЛР {String(lab.number).padStart(2, "0")}</span></div><button className="material-title" onClick={() => onLab(lab.id)}><h2>{lab.title}</h2></button><p>{lab.theory.slice(0, 115)}…</p><div className="material-card-meta"><span><CalendarDays size={13} />До {formatDate(lab.deadline)}</span>{data.user?.role === "student" && <StatusBadge status={status} />}</div><button className="material-open" onClick={() => onLab(lab.id)}>Открыть материалы<ArrowUpRight size={16} /></button></article>; })}</div>{!filtered.length && <EmptyState title={search ? "Ничего не нашлось" : "Начало нового курса"} description={search ? "Попробуйте поискать по другому названию." : "Лабораторные появятся здесь, как только администратор добавит материалы."} />}</>;
 }
 
 function TeamPage({ data, labs, onModal }: { data: WorkspaceData; labs: Lab[]; onModal: (modal: ModalState) => void }) {
-  const [search, setSearch] = useState(""); const student = data.user.role === "student"; const team = data.teams.find(t => t.id === data.user.teamId);
-  if (!student) return <section className="panel"><div className="panel-heading"><h2>Участники курса<span className="mini-badge">{data.teams.length} бригад</span></h2><div className="toolbar-actions"><div className="search-field"><Search size={16} /><input placeholder="Номер или имя..." value={search} onChange={e => setSearch(e.target.value)} /></div>{data.user.role === "admin" && <button className="button button-primary" onClick={() => onModal({ kind: "create-team" })}><Plus size={15} />Создать бригаду</button>}</div></div><div className="team-list">{data.teams.filter(t => `${t.number} ${t.members.map(m => m.name).join(" ")}`.toLowerCase().includes(search.toLowerCase())).map(t => <button className="team-list-row" key={t.id} onClick={() => onModal({ kind: "team", teamId: t.id })}><span className="team-list-avatar"><Users size={23} /></span><span><strong>Бригада №{t.number}</strong><small>{t.members.map(m => m.name || "Данные ещё не заполнены").join(", ")}</small></span><span className="team-size-label">{t.size} участника</span><span className={`consent-tag ${t.consentAt ? "given" : ""}`}>{t.consentAt ? <><ShieldCheck size={12} />ПДн подтверждено</> : "Ожидает регистрации"}</span><ChevronRight size={18} /></button>)}</div></section>;
+  const [search, setSearch] = useState(""); const user = data.user; const student = user?.role === "student"; const team = user ? data.teams.find(t => t.id === user.teamId) : undefined;
+  if (!student) return <section className="panel"><div className="panel-heading"><h2>Участники курса<span className="mini-badge">{data.teams.length} бригад</span></h2><div className="toolbar-actions"><div className="search-field"><Search size={16} /><input placeholder="Номер или имя..." value={search} onChange={e => setSearch(e.target.value)} /></div>{user?.role === "admin" && <button className="button button-primary" onClick={() => onModal({ kind: "create-team" })}><Plus size={15} />Создать бригаду</button>}</div></div><div className="team-list">{data.teams.filter(t => `${t.number} ${t.members.map(m => m.name).join(" ")}`.toLowerCase().includes(search.toLowerCase())).map(t => <button className="team-list-row" key={t.id} onClick={() => onModal({ kind: "team", teamId: t.id })}><span className="team-list-avatar"><Users size={23} /></span><span><strong>Бригада №{t.number}</strong><small>{t.members.map(m => m.name || "Данные ещё не заполнены").join(", ")}</small></span><span className="team-size-label">{t.size} участника</span><span className={`consent-tag ${t.consentAt ? "given" : ""}`}>{t.consentAt ? <><ShieldCheck size={12} />ПДн подтверждено</> : "Ожидает регистрации"}</span><ChevronRight size={18} /></button>)}</div></section>;
   if (!team) return <EmptyState title="Бригада не найдена" description="Обратитесь к администратору курса." />;
   return <><div className="team-banner"><div className="team-banner-icon"><Users size={31} /></div><div><span className="small-kicker">ВАША КОМАНДА</span><h2>Бригада №{team.number}</h2><p>{team.size} участника · {data.courses[0]?.groupCode} · Один общий результат</p></div><button className="button button-white" onClick={() => onModal({ kind: "profile" })}><Settings2 size={15} />Редактировать данные</button></div><div className="members-grid">{team.members.map((member, i) => <article className="member-card" key={i}><div className="member-card-top"><Avatar name={member.name || `Участник ${i + 1}`} color={i} /><span>УЧАСТНИК {i + 1}</span></div><h3>{member.name || "Заполните имя"}</h3><p>{member.contact || "Контакт не указан"}</p><span className="member-status"><span />В вашей бригаде</span></article>)}</div><div className="team-info-grid"><section className="panel team-info-panel"><span className="team-info-icon"><ShieldCheck size={23} /></span><h3>Ваши данные под защитой</h3><p>Имена и контакты видны только вашей бригаде, преподавателю и администратору. Они используются для организации учебного процесса.</p><span className="consent-date">{team.consentAt ? <><CheckCircle2 size={14} />Согласие получено {formatDate(team.consentAt)}</> : "Необходимо согласие участников"}</span></section><section className="panel team-info-panel"><span className="team-info-icon purple-text"><Target size={23} /></span><h3>Одна бригада — общий прогресс</h3><p>Все участники используют один аккаунт. Брони, версии отчётов и баллы общие для всей команды.</p><div className="team-summary-numbers"><strong>{labs.length}<span>лабораторных</span></strong><strong>2<span>активные брони</span></strong><strong>15<span>минут на встречу</span></strong></div></section></div></>;
 }
 
 function SettingsPage({ data, courseId, busy, mutate }: { data: WorkspaceData; courseId: number; busy: boolean; mutate: Mutate }) {
-  const course = data.courses.find(c => c.id === courseId); if (data.user.role !== "admin" || !course) return <EmptyState title="Этот раздел для администратора" description="Настройки курса доступны только администратору." />;
+  const course = data.courses.find(c => c.id === courseId); if (data.user?.role !== "admin" || !course) return <EmptyState title="Этот раздел для администратора" description="Настройки курса доступны только администратору." />;
   const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const form = new FormData(event.currentTarget); await mutate({ action: "update_schedule", courseId, startTime: form.get("startTime"), endTime: form.get("endTime") }); };
   return <div className="settings-layout"><form className="panel settings-panel" key={courseId} onSubmit={submit}><div className="panel-heading"><h2><CalendarRange size={19} />Рабочее расписание</h2></div><div className="settings-body"><label className="field-label">День занятий</label><div className="weekday-picker">{["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map(day => <span key={day} className={day === "Сб" ? "selected" : ""}>{day}</span>)}</div><div className="form-two-columns"><label className="field">Начало<input name="startTime" type="time" step="900" defaultValue={course.startTime} required /></label><label className="field">Окончание<input name="endTime" type="time" step="900" defaultValue={course.endTime} required /></label></div><label className="field">Длительность встречи<div className="readonly-field"><Clock3 size={16} />15 минут<span>Фиксировано</span></div></label><div className="info-box"><Info size={17} /><p>Изменения применяются ко всем субботам. Активные брони не должны выходить за новые рабочие часы.</p></div><button className="button button-primary" disabled={busy}>{busy ? <Spinner /> : <Check size={16} />}Сохранить расписание</button></div></form><section className="panel rules-panel"><h2>Правила курса</h2>{[{ value: "2 брони", text: "Максимум активных записей на бригаду" }, { value: "24 часа", text: "Минимальный срок записи, отмены и переноса" }, { value: "10 МБ", text: "Максимальный размер PDF-отчёта" }, { value: "Без ограничений", text: "Числовая шкала оценки, включая дробные баллы" }].map(rule => <div className="rule-setting" key={rule.value}><strong>{rule.value}</strong><p>{rule.text}</p></div>)}<small>Эти правила проверяются на сервере и действуют для всех бригад.</small></section></div>;
 }

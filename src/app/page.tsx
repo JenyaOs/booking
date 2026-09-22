@@ -1,10 +1,9 @@
 import Workspace from "@/components/workspace";
-import { demoUser, ensureSeed, getCurrentUser, getWorkspace } from "@/lib/server";
+import { ensureSeed, getCurrentUser } from "@/lib/server";
 
 export const dynamic = "force-dynamic";
 export default async function HomePage() {
   await ensureSeed();
   const user = await getCurrentUser();
-  const data = await getWorkspace(user ?? await demoUser("student"), !!user);
-  return <Workspace initialData={data} />;
+  return <Workspace initialData={user ? { user, authenticated: true, courses: [], teams: [], labs: [], progress: [], bookings: [], files: [], history: [], defaultDate: "" } : null} />;
 }
